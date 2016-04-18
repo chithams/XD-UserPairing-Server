@@ -18,6 +18,7 @@
  * See the README and LICENSE files for further information.
  *
  */
+
 var util         = require("util");
 var EventEmitter = require("events").EventEmitter;
 var PeerServer = require('peer').PeerServer;
@@ -46,6 +47,7 @@ function XDmvcServer() {
     this.sessions = {};
     this.configuredRoles = {};
     this.idBase = 0;
+    this.dict = {}; //key = Google UserId Token "sub", value = deviceId
 }
 util.inherits(XDmvcServer, EventEmitter);
 
@@ -79,6 +81,7 @@ XDmvcServer.prototype.addPeerJsPeer = function addPeerJsPeer(id, peerId) {
 XDmvcServer.prototype.addSocketIoPeer = function addSocketIoPeer(id, socketioId) {
     console.log("adding socketio peer " + id + " " + socketioId);
     this.peers[id].usesSocketIo = true;
+    // this.peers[id].peerId = id
     this.socketIoPeers[id] = {
         'id': id,
         'socketioId': socketioId,
@@ -86,7 +89,8 @@ XDmvcServer.prototype.addSocketIoPeer = function addSocketIoPeer(id, socketioId)
         'role': undefined,
         'roles': [],
         'session': undefined,
-        'connectedPeers' : []
+        'connectedPeers' : [],
+        'users' : []
     };
 };
 
@@ -134,13 +138,13 @@ XDmvcServer.prototype.startPeerSever = function(port){
     });
     var that = this;
 
-/*
-    pserver.on('connection', function(id) {
-        console.log("user connected via PeerJS. ID: " + id);
-        that.addPeerJsPeer(id);
-        that.emit("connected", id);
-    });
-*/
+    /*
+     pserver.on('connection', function(id) {
+     console.log("user connected via PeerJS. ID: " + id);
+     that.addPeerJsPeer(id);
+     that.emit("connected", id);
+     });
+     */
     pserver.on('disconnect', function(id) {
         var deviceId = Object.keys(that.peerJsPeers).filter(function(key){
             return that.peerJsPeers[key].peerId == id;
@@ -279,12 +283,12 @@ XDmvcServer.prototype.startSocketIoServer = function startSocketIoServer(port) {
 
 XDmvcServer.prototype.startAjaxServer = function(port){
     /*
-    var that = this;
+     var that = this;
 
-    var ajax = function(req, res, next){
-        return that.handleAjaxRequest(req,res,next);
-    };
-    */
+     var ajax = function(req, res, next){
+     return that.handleAjaxRequest(req,res,next);
+     };
+     */
     var app = connect().use(bodyParser.json({limit: '50mb'})).use(allowCrossDomain).use(this.handleAjaxRequest.bind(this));
     var server = http.createServer(app);
     server.listen(port);
@@ -311,11 +315,40 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
             res.write('{"peers": ' + JSON.stringify(peersArray) + ', "sessions": ' + JSON.stringify(this.sessions) + '}');
             res.end();
             break;
+        case 'pairfriends':
+            for(var i in this.peers){
+                //if id matches
+                if(i != query.id && this.dict[JSON.stringify(query.data)]){
+                    x = this.dict[JSON.stringify(query.data)];
+                    res.write(x);
+                    // res.write(i);
+                    res.end();
+                    break;
+                }
+            }
+            // res.write("No id match");
+            res.end();
+            break;
+        case 'contact':
+            var x = JSON.stringify(query.data);
+            // res.write(x + " " + JSON.stringify(this.peers[0].users));
 
+
+            for( var i in this.peers){
+                //res.write( JSON.stringify(this.peers[i].users).localeCompare(x) + " " +x);
+                // if(JSON.stringify(this.peers[i].users).localeCompare(x) == 0) {
+                if(this.dict[x]){
+                    res.write("true");
+                    res.end();
+                    break;
+                }
+            }
+            res.end();
+            break;
         case 'sync':
-             this.emit("objectChanged", query.data);
-             res.end();
-             break;
+            this.emit("objectChanged", query.data);
+            res.end();
+            break;
         case 'roles':
             // only store role information, if the peer is already connected
             if (this.peers[query.id]){
@@ -328,6 +361,7 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
             if (this.peers[query.id]){
                 this.peers[query.id].device = query.data
             }
+
             res.end();
             break;
         case 'deviceId':
@@ -349,6 +383,36 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
             res.write(JSON.stringify({id: id, error: error}));
             res.end();
             break;
+        case 'user':
+            //var Base64={_keyStr:"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=",encode:function(e){var t="";var n,r,i,s,o,u,a;var f=0;e=Base64._utf8_encode(e);while(f<e.length){n=e.charCodeAt(f++);r=e.charCodeAt(f++);i=e.charCodeAt(f++);s=n>>2;o=(n&3)<<4|r>>4;u=(r&15)<<2|i>>6;a=i&63;if(isNaN(r)){u=a=64}else if(isNaN(i)){a=64}t=t+this._keyStr.charAt(s)+this._keyStr.charAt(o)+this._keyStr.charAt(u)+this._keyStr.charAt(a)}return t},decode:function(e){var t="";var n,r,i;var s,o,u,a;var f=0;e=e.replace(/[^A-Za-z0-9\+\/\=]/g,"");while(f<e.length){s=this._keyStr.indexOf(e.charAt(f++));o=this._keyStr.indexOf(e.charAt(f++));u=this._keyStr.indexOf(e.charAt(f++));a=this._keyStr.indexOf(e.charAt(f++));n=s<<2|o>>4;r=(o&15)<<4|u>>2;i=(u&3)<<6|a;t=t+String.fromCharCode(n);if(u!=64){t=t+String.fromCharCode(r)}if(a!=64){t=t+String.fromCharCode(i)}}t=Base64._utf8_decode(t);return t},_utf8_encode:function(e){e=e.replace(/\r\n/g,"\n");var t="";for(var n=0;n<e.length;n++){var r=e.charCodeAt(n);if(r<128){t+=String.fromCharCode(r)}else if(r>127&&r<2048){t+=String.fromCharCode(r>>6|192);t+=String.fromCharCode(r&63|128)}else{t+=String.fromCharCode(r>>12|224);t+=String.fromCharCode(r>>6&63|128);t+=String.fromCharCode(r&63|128)}}return t},_utf8_decode:function(e){var t="";var n=0;var r=c1=c2=0;while(n<e.length){r=e.charCodeAt(n);if(r<128){t+=String.fromCharCode(r);n++}else if(r>191&&r<224){c2=e.charCodeAt(n+1);t+=String.fromCharCode((r&31)<<6|c2&63);n+=2}else{c2=e.charCodeAt(n+1);c3=e.charCodeAt(n+2);t+=String.fromCharCode((r&15)<<12|(c2&63)<<6|c3&63);n+=3}}return t}}
+            if(this.peers[query.id]){
+                var split_list = query.data.split('.')
+                var jose_header = split_list[0];
+                var payload = split_list[1];
+                var signature = split_list[2];
+
+                var atob = require('atob');
+                var dp2 = JSON.parse(atob(payload).toString());
+                this.peers[query.id].users = dp2.sub;
+                this.dict[JSON.stringify(dp2.sub)] = query.id;
+            }
+            var usersDevices = ["hey","you"];
+            var s = "";
+            for (var i in this.peers) {     // check if user already in system
+                var x = JSON.stringify(dp2.sub);
+                if (JSON.stringify(this.peers[i].users) == x && i != query.id && x!= null) {
+                    usersDevices.push(this.peers[i].id);
+                    if (s == "") {
+                        s =this.peers[i].id;
+                        continue;
+                    }
+                    s = s + "."+this.peers[i].id;
+                }
+            }
+
+            res.write(s);
+            res.end();
+            break;
 
         default :
             // someone tried to call a not supported method
@@ -356,7 +420,7 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
             console.log("not found");
             res.setHeader("Content-Type", "text/html");
             //      res.statusCode = 404;
-            res.write('<h1>404 - File not found</h1>');
+            res.write('<h1>404 - File not found! </h1>');
             res.write(parameters.pathname);
             res.end();
     }
@@ -378,3 +442,4 @@ XDmvcServer.prototype.start = function(portPeer, portSocketIo, portAjax) {
 };
 
 module.exports = XDmvcServer;
+
