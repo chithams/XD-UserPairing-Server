@@ -414,10 +414,10 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
                 this.peers[query.id].users = dp2.sub;
                 this.dict[JSON.stringify(dp2.sub)] = query.id;
             }
-            var usersDevices = ["hey","you"];
+           // var usersDevices = ["hey","you"];
             var s = "";
             for (var i in this.peers) {     // check if user already in system
-                var x = JSON.stringify(dp2.sub);
+             //   var x = JSON.stringify(dp2.sub);
                 if (JSON.stringify(this.peers[i].users) == x && i != query.id && x!= null) {
                     usersDevices.push(this.peers[i].id);
                     if (s == "") {
