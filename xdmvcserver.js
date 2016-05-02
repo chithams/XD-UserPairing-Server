@@ -48,6 +48,7 @@ function XDmvcServer() {
     this.configuredRoles = {};
     this.idBase = 0;
     this.dict = {}; //key = Google UserId Token "sub", value = deviceId
+    this.locations = {} ; //key = deviceID, value:  location coordinate lat,long,google userid
 }
 util.inherits(XDmvcServer, EventEmitter);
 
@@ -309,6 +310,44 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
     res.setHeader("Content-Type", "text/json");
 
     switch (query.type){
+        case 'logLocation':
+            var arr = query.data;
+            this.locations[query.id]= [arr[1],arr[2],arr[0]];
+            console.log("Location has been logged for "+query.id+ ", "+arr[0]);
+            res.end();
+            break;
+        case 'getDistance':
+            var myLocationEntry= this.locations[query.id];
+            console.log(myLocationEntry==null+"###");
+            var lat1 = myLocationEntry[0]; var lon1 = myLocationEntry[1];
+            var contactsLocationEntry = this.locations[this.dict[JSON.stringify(query.data)]];
+            console.log(contactsLocationEntry==null+"###");
+            console.log(lat1+ " * "+ lon1 + " + "+ this.dict[JSON.stringify(query.data)]);
+
+           //if(contactsLocationEntry != null && myLocationEntry!=null) {
+               var lat2 = contactsLocationEntry[0];
+               var lon2 = contactsLocationEntry[1];
+            console.log(lat2+ " * "+ lon2);
+               var R = 6371; // Radius of the earth in km
+               var dLat = (lat2 - lat1) * (Math.PI / 180);  // deg2rad below
+               var dLon = (lon2 - lon1) * (Math.PI / 180);
+               var a =
+                       Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                       Math.cos((lat1)*(Math.PI / 180)) *
+                       Math.cos((lat2)*(Math.PI / 180)) *
+                       Math.sin(dLon / 2) * Math.sin(dLon / 2)
+                   ;
+               var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+               var d = R * c; // Distance in km
+               console.log("DISTANCE " + d);
+
+
+               res.write(JSON.stringify(d));
+               //console.log("LOCATION: " + locationEntry[0] + "/" + locationEntry[1]);
+               res.end();
+               break
+
+
         case 'listAllPeers':
             // return list of all peers
             var peersArray = Object.keys(this.peers).map(function (key) {return this.peers[key]}, this);
@@ -319,7 +358,7 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
             for(var i in this.peers){
                 //if id matches
                 if(i != query.id && this.dict[JSON.stringify(query.data)]){
-                    x = this.dict[JSON.stringify(query.data)];
+                   var x = this.dict[JSON.stringify(query.data)];
                     res.write(x);
                     // res.write(i);
                     res.end();
@@ -396,6 +435,7 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
 
               //  delete this.peers[query.id].users ;
                 delete this.dict[JSON.stringify(dp2.sub)];
+                delete this.locations[query.id];
 
 
             res.end();
