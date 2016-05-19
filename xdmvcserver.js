@@ -48,7 +48,9 @@ function XDmvcServer() {
     this.configuredRoles = {};
     this.idBase = 0;
     this.dict = {}; //key = Google UserId Token "sub", value = deviceId
+    this.userDevices = {};
     this.locations = {} ; //key = deviceID, value:  location coordinate lat,long,google userid
+    this.relationships = {}; //{User's Google id: { User's friend's Google id : relationship} }
 }
 util.inherits(XDmvcServer, EventEmitter);
 
@@ -318,69 +320,65 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
             break;
         case 'getDistance':
             var myLocationEntry= this.locations[query.id];
-            console.log(myLocationEntry==null+"###");
-            var lat1 = myLocationEntry[0]; var lon1 = myLocationEntry[1];
             var contactsLocationEntry = this.locations[this.dict[JSON.stringify(query.data)]];
-            console.log(contactsLocationEntry==null+"###");
-            console.log(lat1+ " * "+ lon1 + " + "+ this.dict[JSON.stringify(query.data)]);
 
-           //if(contactsLocationEntry != null && myLocationEntry!=null) {
+           if(contactsLocationEntry && contactsLocationEntry.length>0 && myLocationEntry && myLocationEntry.length>0) {
+               var lat1 = myLocationEntry[0];
+               var lon1 = myLocationEntry[1];
                var lat2 = contactsLocationEntry[0];
                var lon2 = contactsLocationEntry[1];
-            console.log(lat2+ " * "+ lon2);
+               console.log(lat2 + " * " + lon2);
                var R = 6371; // Radius of the earth in km
                var dLat = (lat2 - lat1) * (Math.PI / 180);  // deg2rad below
                var dLon = (lon2 - lon1) * (Math.PI / 180);
                var a =
                        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                       Math.cos((lat1)*(Math.PI / 180)) *
-                       Math.cos((lat2)*(Math.PI / 180)) *
+                       Math.cos((lat1) * (Math.PI / 180)) *
+                       Math.cos((lat2) * (Math.PI / 180)) *
                        Math.sin(dLon / 2) * Math.sin(dLon / 2)
                    ;
                var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
                var d = R * c; // Distance in km
                console.log("DISTANCE " + d);
-
-
                res.write(JSON.stringify(d));
                //console.log("LOCATION: " + locationEntry[0] + "/" + locationEntry[1]);
-               res.end();
-               break
-
-
+           }
+            res.end();
+            break
         case 'listAllPeers':
             // return list of all peers
             var peersArray = Object.keys(this.peers).map(function (key) {return this.peers[key]}, this);
             res.write('{"peers": ' + JSON.stringify(peersArray) + ', "sessions": ' + JSON.stringify(this.sessions) + '}');
             res.end();
             break;
-        case 'pairfriends':
-            for(var i in this.peers){
-                //if id matches
-                if(i != query.id && this.dict[JSON.stringify(query.data)]){
-                   var x = this.dict[JSON.stringify(query.data)];
-                    res.write(x);
-                    // res.write(i);
-                    res.end();
-                    break;
+        case 'enterFriendship':
+            if(query.data){
+                if(query.data.length){
+                    res.write(query.data[2]+"###")
+                    //this.relationships[query.data[0]][query.data[1]] =
+                }
+                else{
+                    res.write(query.data+"***")
                 }
             }
-            // res.write("No id match");
+            else {
+                res.write("!!!");
+            }
+            res.end();
+            break;
+        case 'pairfriends':
+            //TODO: should connect to specific device of friend, not just to "last" device of contact
+            if(this.userDevices[query.data]){
+                var contactsDevices = Object.keys(this.userDevices[query.data]);
+                res.write(contactsDevices[contactsDevices.length-1]); //connects to last device of contact
+            }
             res.end();
             break;
         case 'contact':
-            var x = JSON.stringify(query.data);
-            // res.write(x + " " + JSON.stringify(this.peers[0].users));
-
-
-            for( var i in this.peers){
-                //res.write( JSON.stringify(this.peers[i].users).localeCompare(x) + " " +x);
-                // if(JSON.stringify(this.peers[i].users).localeCompare(x) == 0) {
-                if(this.dict[x]){
-                    res.write("true");
-                    res.end();
-                    break;
-                }
+            if(this.userDevices[query.data]){
+                res.write(JSON.stringify(this.userDevices[query.data]));
+                res.end();
+                break;
             }
             res.end();
             break;
@@ -400,7 +398,6 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
             if (this.peers[query.id]){
                 this.peers[query.id].device = query.data
             }
-
             res.end();
             break;
         case 'deviceId':
@@ -423,20 +420,28 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
             res.end();
             break;
         case 'userSignOut':
-
                 var split_list = query.data.split('.')
                 var jose_header = split_list[0];
                 var payload = split_list[1];
                 var signature = split_list[2];
 
                 var atob = require('atob');
-                var dp2 = JSON.parse(atob(payload).toString());
+                var payloadParsed = JSON.parse(atob(payload).toString());
+                var userID = payloadParsed.sub;
 
 
               //  delete this.peers[query.id].users ;
-                delete this.dict[JSON.stringify(dp2.sub)];
+                delete this.dict[userID];
                 delete this.locations[query.id];
-
+                delete this.userDevices[userID][query.id];
+                if(Object.keys(this.userDevices[userID]).length > 0){
+                    //not last device for this user
+                }
+                else{
+                    //no more logged in devices for this user
+                    delete this.userDevices[userID];
+                }
+                console.log(this.userDevices);
 
             res.end();
             break;
@@ -444,31 +449,29 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
         case 'userSignIn':
             //var Base64={_keyStr:"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=",encode:function(e){var t="";var n,r,i,s,o,u,a;var f=0;e=Base64._utf8_encode(e);while(f<e.length){n=e.charCodeAt(f++);r=e.charCodeAt(f++);i=e.charCodeAt(f++);s=n>>2;o=(n&3)<<4|r>>4;u=(r&15)<<2|i>>6;a=i&63;if(isNaN(r)){u=a=64}else if(isNaN(i)){a=64}t=t+this._keyStr.charAt(s)+this._keyStr.charAt(o)+this._keyStr.charAt(u)+this._keyStr.charAt(a)}return t},decode:function(e){var t="";var n,r,i;var s,o,u,a;var f=0;e=e.replace(/[^A-Za-z0-9\+\/\=]/g,"");while(f<e.length){s=this._keyStr.indexOf(e.charAt(f++));o=this._keyStr.indexOf(e.charAt(f++));u=this._keyStr.indexOf(e.charAt(f++));a=this._keyStr.indexOf(e.charAt(f++));n=s<<2|o>>4;r=(o&15)<<4|u>>2;i=(u&3)<<6|a;t=t+String.fromCharCode(n);if(u!=64){t=t+String.fromCharCode(r)}if(a!=64){t=t+String.fromCharCode(i)}}t=Base64._utf8_decode(t);return t},_utf8_encode:function(e){e=e.replace(/\r\n/g,"\n");var t="";for(var n=0;n<e.length;n++){var r=e.charCodeAt(n);if(r<128){t+=String.fromCharCode(r)}else if(r>127&&r<2048){t+=String.fromCharCode(r>>6|192);t+=String.fromCharCode(r&63|128)}else{t+=String.fromCharCode(r>>12|224);t+=String.fromCharCode(r>>6&63|128);t+=String.fromCharCode(r&63|128)}}return t},_utf8_decode:function(e){var t="";var n=0;var r=c1=c2=0;while(n<e.length){r=e.charCodeAt(n);if(r<128){t+=String.fromCharCode(r);n++}else if(r>191&&r<224){c2=e.charCodeAt(n+1);t+=String.fromCharCode((r&31)<<6|c2&63);n+=2}else{c2=e.charCodeAt(n+1);c3=e.charCodeAt(n+2);t+=String.fromCharCode((r&15)<<12|(c2&63)<<6|c3&63);n+=3}}return t}}
             if(this.peers[query.id]){
-                var split_list = query.data.split('.')
+                var split_list = query.data.split('.');
                 var jose_header = split_list[0];
                 var payload = split_list[1];
                 var signature = split_list[2];
-
                 var atob = require('atob');
-                var dp2 = JSON.parse(atob(payload).toString());
-                this.peers[query.id].users = dp2.sub;
-                this.dict[JSON.stringify(dp2.sub)] = query.id;
-            }
-           // var usersDevices = ["hey","you"];
-            var s = "";
-            for (var i in this.peers) {     // check if user already in system
-                var x = JSON.stringify(dp2.sub);
-                if (JSON.stringify(this.peers[i].users) == x && i != query.id && x!= null) {
-                  //  usersDevices.push(this.peers[i].id);
-                    if (s == "") {
-                        s =this.peers[i].id;
-                        continue;
-                    }
-                    s = s + "."+this.peers[i].id;
-                }
-            }
+                var payloadParsed = JSON.parse(atob(payload).toString());
+                var userID = payloadParsed.sub;
+                this.peers[query.id].users = userID;
+                this.dict[userID] = query.id;
 
-            res.write(s);
+                if(this.userDevices[userID]){
+                    res.write(JSON.stringify(this.userDevices[userID]));
+                    this.userDevices[userID][query.id] = "";
+                    console.log("not first login")
+                }
+                else{
+                    this.userDevices[userID] = {};
+                    this.userDevices[userID][query.id] = "";
+                    console.log("first login")
+                }
+                console.log(this.userDevices);
+
+            }
             res.end();
             break;
 
