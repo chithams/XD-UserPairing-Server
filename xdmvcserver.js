@@ -52,6 +52,7 @@ function XDmvcServer() {
     this.userIds = {}; //key = deviceId , value = User's Google id
     this.locations = {} ; //key = deviceID, value:  location coordinate lat,long,google userid
     this.relationships = {}; //{User's Google id: { User's friend's Google id : relationship} }
+    this.friendsByGroup = {};  //{user's google id: {relationship : {friend's id : " "}}}
     this.pairingRequests = {}; //{ deviceID :{Google user id of user who wants to pair with this device : ""}
 
 }
@@ -354,29 +355,78 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
             res.write('{"peers": ' + JSON.stringify(peersArray) + ', "sessions": ' + JSON.stringify(this.sessions) + '}');
             res.end();
             break;
-        case 'enterRelationship':
-            
-            if(query.data){
-
-                if(query.data.length){
-                    //res.write(query.data[2]+"###")
-                    var userID = query.data[0];
-                    var contactID = query.data[1];
-                    var relationshipName = query.data[2];
-                    if(this.relationships[userID]){
-                        this.relationships[userID][contactID] = relationshipName;
+        case 'removeDevice':
+            if(this.userIds[query.id]){
+                var userID = this.userIds[query.id];
+                if(this.userDevices[userID][query.id]){
+                    delete this.userDevices[userID][query.id];
+                }
+                else{
+                    console.log('removeDevice error: no device found ')
+                }
+                if(Object.keys(this.userDevices[userID]).length <= 0){
+                    //no more logged in devices for this user
+                    delete this.userDevices[userID];
+                }
+            }
+            else{
+                console.log('removeDevice error: no user id for this device')
+            }
+            res.end();
+            break;
+        case 'getFriendsByGroup':
+            if(this.userIds[query.id]){
+                var userID = this.userIds[query.id];
+                if(this.friendsByGroup[userID]){
+                    if(query.data == "all"){
+                        if(this.relationships[userID]){
+                            res.write(JSON.stringify(this.relationships[userID]));
+                        }
+                        else{
+                            console.log("in all: ");
+                            console.log(this.relationships);
+                        }
                     }
                     else{
-                        this.relationships[userID] = {};
-                        this.relationships[userID][contactID] = relationshipName;
+                        console.log(query.data + (query.data == "all"));
+                    }
+                    if(this.friendsByGroup[userID][query.data]){
+                        res.write(JSON.stringify(this.friendsByGroup[userID][query.data]));
+                    }
+                    else{
+                        console.log("getFriendsByGroup error : user has no friends in this group")
+                        console.log(userID + " " + query.data );
+                        console.log(this.friendsByGroup);
                     }
                 }
                 else{
-                    res.write(query.data+"***")
+                    console.log("getFriendsByGroup error: friends not entered")
+                    console.log(userID + " " + query.data );
+                    console.log(this.friendsByGroup);
                 }
+
             }
-            else {
-                res.write("!!!");
+            res.end();
+            break;
+        case 'enterRelationship':
+            if(query.data){
+                var userID = query.data[0];
+                var contactID = query.data[1];
+                var relationshipName = query.data[2];
+                if(this.relationships[userID]){
+                    this.relationships[userID][contactID] = relationshipName;
+                }
+                else{
+                    this.relationships[userID] = {};
+                    this.relationships[userID][contactID] = relationshipName;
+                }
+                if(!this.friendsByGroup[userID]){
+                    this.friendsByGroup[userID] = {};
+                }
+                if(!this.friendsByGroup[userID][relationshipName]){
+                    this.friendsByGroup[userID][relationshipName] = {};
+                }
+                this.friendsByGroup[userID][relationshipName][contactID] = " ";
             }
             res.end();
             break;
@@ -538,12 +588,12 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
 
                 if(this.userDevices[userID]){
                     res.write(JSON.stringify(this.userDevices[userID]));
-                    this.userDevices[userID][query.id] = "";
+                    this.userDevices[userID][query.id] = " ";
                     console.log("not first login")
                 }
                 else{
                     this.userDevices[userID] = {};
-                    this.userDevices[userID][query.id] = "";
+                    this.userDevices[userID][query.id] = " ";
                     console.log("first login")
                 }
                 console.log(this.userDevices);
