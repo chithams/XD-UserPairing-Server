@@ -48,9 +48,12 @@ function XDmvcServer() {
     this.configuredRoles = {};
     this.idBase = 0;
     this.dict = {}; //key = Google UserId Token "sub", value = deviceId
-    this.userDevices = {};
+    this.userDevices = {}; //key =  User's Google id, value = List of deviceIDs
+    this.userIds = {}; //key = deviceId , value = User's Google id
     this.locations = {} ; //key = deviceID, value:  location coordinate lat,long,google userid
     this.relationships = {}; //{User's Google id: { User's friend's Google id : relationship} }
+    this.pairingRequests = {}; //{ deviceID :{Google user id of user who wants to pair with this device : ""}
+
 }
 util.inherits(XDmvcServer, EventEmitter);
 
@@ -351,11 +354,22 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
             res.write('{"peers": ' + JSON.stringify(peersArray) + ', "sessions": ' + JSON.stringify(this.sessions) + '}');
             res.end();
             break;
-        case 'enterFriendship':
+        case 'enterRelationship':
+            
             if(query.data){
+
                 if(query.data.length){
-                    res.write(query.data[2]+"###")
-                    //this.relationships[query.data[0]][query.data[1]] =
+                    //res.write(query.data[2]+"###")
+                    var userID = query.data[0];
+                    var contactID = query.data[1];
+                    var relationshipName = query.data[2];
+                    if(this.relationships[userID]){
+                        this.relationships[userID][contactID] = relationshipName;
+                    }
+                    else{
+                        this.relationships[userID] = {};
+                        this.relationships[userID][contactID] = relationshipName;
+                    }
                 }
                 else{
                     res.write(query.data+"***")
@@ -366,11 +380,71 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
             }
             res.end();
             break;
+        case 'checkPairingRequest':
+            if(this.pairingRequests[query.id]){
+                res.write(JSON.stringify(this.pairingRequests[query.id]));
+                console.log("found pairing requests");
+            }
+            else{
+                console.log("no pairing requests");
+            }
+            res.end();
+            break;
+        case 'declinePairingRequest':
+            if(this.pairingRequests[query.id] && this.pairingRequests[query.id][query.data]){
+                delete this.pairingRequests[query.id][query.data];
+                res.write("deleted");
+            }
+            res.end();
+            break;
         case 'pairfriends':
             //TODO: should connect to specific device of friend, not just to "last" device of contact
+            //TODO: requires that this.relationship is updated for userID and contactID!
+            var userID = this.userIds[query.id];
+            var contactID = query.data;
+            console.log(contactID );
+            console.log(" CONTACT ID");
             if(this.userDevices[query.data]){
                 var contactsDevices = Object.keys(this.userDevices[query.data]);
-                res.write(contactsDevices[contactsDevices.length-1]); //connects to last device of contact
+                var deviceToConnect = contactsDevices[contactsDevices.length-1]; //TODO: should be given as argument by client
+               if(this.relationships[userID] && this.relationships[contactID]){//TODO: what if relationships not set yet.
+
+                   if(this.relationships[userID][contactID] == "friend" && this.relationships[contactID][userID] == "friend") {
+                       //symmetric friendship,  returns "last" device of contact
+                       res.write(deviceToConnect); //connects to last device of contact
+                   }
+                   else{
+                       //asymmetric friendship, not "friend" for both.
+                       if(this.pairingRequests[query.id]){
+                           console.log(this.pairingRequests[query.id][contactID])
+                       }
+                       if(this.pairingRequests[query.id] && this.pairingRequests[query.id][contactID]){
+                           //pairingRequest accepted
+                           delete this.pairingRequests[query.id][contactID];
+                           res.write(deviceToConnect);
+                       }
+                       else {
+                           //needs confirmation to pair, add pairingRequest
+                           if (this.pairingRequests[deviceToConnect]) {
+                               this.pairingRequests[deviceToConnect][userID] = "T";
+                           }
+                           else {
+                               this.pairingRequests[deviceToConnect] = {};
+                               this.pairingRequests[deviceToConnect][userID] = "T";
+                           }
+                           //TODO: notify user, that pairing request was sent
+                           console.log("not close friend, pairing request added");
+                       }
+                   }
+               }
+               else{
+                   //TODO: solve this issue, requires relationships to be set.
+                  console.log("Relationships not defined");
+               }
+
+            }
+            else{
+                console.log("NO device found");
             }
             res.end();
             break;
@@ -434,6 +508,7 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
                 delete this.dict[userID];
                 delete this.locations[query.id];
                 delete this.userDevices[userID][query.id];
+                delete this.userIds[query.id];
                 if(Object.keys(this.userDevices[userID]).length > 0){
                     //not last device for this user
                 }
@@ -458,6 +533,8 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
                 var userID = payloadParsed.sub;
                 this.peers[query.id].users = userID;
                 this.dict[userID] = query.id;
+
+                this.userIds[query.id] = userID;
 
                 if(this.userDevices[userID]){
                     res.write(JSON.stringify(this.userDevices[userID]));
