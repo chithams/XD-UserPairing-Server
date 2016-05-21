@@ -50,7 +50,8 @@ function XDmvcServer() {
     this.dict = {}; //key = Google UserId Token "sub", value = deviceId
     this.userDevices = {}; //key =  User's Google id, value = List of deviceIDs
     this.userIds = {}; //key = deviceId , value = User's Google id
-    this.locations = {} ; //key = deviceID, value:  location coordinate lat,long,google userid
+    this.deviceLocations = {} ; //key = deviceID, value:  location coordinate lat,long,google userid
+    this.distances = {}; //{userID: { contactID : {deviceID: distance in km} }
     this.relationships = {}; //{User's Google id: { User's friend's Google id : relationship} }
     this.friendsByGroup = {};  //{user's google id: {relationship : {friend's id : " "}}}
     this.pairingRequests = {}; //{ deviceID :{Google user id of user who wants to pair with this device : ""}
@@ -318,37 +319,50 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
     switch (query.type){
         case 'logLocation':
             var arr = query.data;
-            this.locations[query.id]= [arr[1],arr[2],arr[0]];
+            this.deviceLocations[query.id]= [arr[1],arr[2],arr[0]];
             console.log("Location has been logged for "+query.id+ ", "+arr[0]);
             res.end();
             break;
-        case 'getDistance':
-            var myLocationEntry= this.locations[query.id];
-            var contactsLocationEntry = this.locations[this.dict[JSON.stringify(query.data)]];
+        case 'logDistance':
+            console.log("logging distance");
+            var myLocationEntry= this.deviceLocations[query.id];
+            var userID = this.userIds[query.id];
+            var contactID = query.data;
+            var devices = Object.keys(this.userDevices[contactID]);
+            console.log(devices);
+            for(var k = 0 ; k< devices.length; k++){
+                var deviceID = devices[k];
+                var contactsLocationEntry = this.deviceLocations[deviceID];
+                console.log("iterating devices");
+                if(contactsLocationEntry && contactsLocationEntry.length>0 && myLocationEntry && myLocationEntry.length>0) {
+                    console.log("found location entries");
+                    var lat1 = myLocationEntry[0];
+                    var lon1 = myLocationEntry[1];
+                    var lat2 = contactsLocationEntry[0];
+                    var lon2 = contactsLocationEntry[1];
+                    console.log(lat2 + " * " + lon2);
+                    var R = 6371; // Radius of the earth in km
+                    var dLat = (lat2 - lat1) * (Math.PI / 180);  // deg2rad below
+                    var dLon = (lon2 - lon1) * (Math.PI / 180);
+                    var a =
+                            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                            Math.cos((lat1) * (Math.PI / 180)) *
+                            Math.cos((lat2) * (Math.PI / 180)) *
+                            Math.sin(dLon / 2) * Math.sin(dLon / 2)
+                        ;
+                    var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+                    var d = R * c; // Distance in km
+                    console.log("DISTANCE " + d);
+                    if(!this.distances[userID]) this.distances[userID] = {};
+                    if(!this.distances[userID][contactID]) this.distances[userID][contactID] = {};
+                    this.distances[userID][contactID][deviceID] = d;
 
-           if(contactsLocationEntry && contactsLocationEntry.length>0 && myLocationEntry && myLocationEntry.length>0) {
-               var lat1 = myLocationEntry[0];
-               var lon1 = myLocationEntry[1];
-               var lat2 = contactsLocationEntry[0];
-               var lon2 = contactsLocationEntry[1];
-               console.log(lat2 + " * " + lon2);
-               var R = 6371; // Radius of the earth in km
-               var dLat = (lat2 - lat1) * (Math.PI / 180);  // deg2rad below
-               var dLon = (lon2 - lon1) * (Math.PI / 180);
-               var a =
-                       Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                       Math.cos((lat1) * (Math.PI / 180)) *
-                       Math.cos((lat2) * (Math.PI / 180)) *
-                       Math.sin(dLon / 2) * Math.sin(dLon / 2)
-                   ;
-               var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-               var d = R * c; // Distance in km
-               console.log("DISTANCE " + d);
-               res.write(JSON.stringify(d));
-               //console.log("LOCATION: " + locationEntry[0] + "/" + locationEntry[1]);
-           }
+                    res.write(JSON.stringify(d));
+                   console.log("DISTANCES: "+ this.distances);
+                }
+            }
             res.end();
-            break
+            break;
         case 'listAllPeers':
             // return list of all peers
             var peersArray = Object.keys(this.peers).map(function (key) {return this.peers[key]}, this);
@@ -356,6 +370,8 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
             res.end();
             break;
         case 'removeDevice':
+            //TODO: on disconnect, clean dicts.
+            console.log("REFRESHING OR CLOSING");
             if(this.userIds[query.id]){
                 var userID = this.userIds[query.id];
                 if(this.userDevices[userID][query.id]){
@@ -372,6 +388,36 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
             else{
                 console.log('removeDevice error: no user id for this device')
             }
+            if(this.deviceLocations[query.id]){
+                delete this.deviceLocations[query.id];
+            }
+            res.end();
+            break;
+        case 'sortGroupByDistance':
+            var contactList = Object.keys(JSON.parse(query.data));
+            var userID = this.userIds[query.id];
+            var groupDistances = {};
+            for(var c = 0; c < contactList.length;c++){
+                var contactID = contactList[c]
+                var devices = this.distances[userID][contactID];
+                console.log("DEVICES "+JSON.stringify(devices));
+               for( var j in devices){
+                   if(this.deviceLocations[j]) {
+                       groupDistances[j] = devices[j];
+                   }
+                   else{
+                       delete devices[j];
+                   }
+               }
+                //Object.append(this.distances[userID][contactID],groupDistances);
+            }
+            var sortable = [];
+            for (var device in groupDistances){
+                sortable.push([device, this.userIds[device], groupDistances[device] ])
+            }
+            sortable.sort(function(a,b){ return a[2]-b[2]});
+            res.write(JSON.stringify(sortable));
+
             res.end();
             break;
         case 'getFriendsByGroup':
@@ -381,6 +427,8 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
                     if(query.data == "all"){
                         if(this.relationships[userID]){
                             res.write(JSON.stringify(this.relationships[userID]));
+                            res.end();
+                            break;
                         }
                         else{
                             console.log("in all: ");
@@ -388,15 +436,14 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
                         }
                     }
                     else{
-                        console.log(query.data + (query.data == "all"));
-                    }
-                    if(this.friendsByGroup[userID][query.data]){
-                        res.write(JSON.stringify(this.friendsByGroup[userID][query.data]));
-                    }
-                    else{
-                        console.log("getFriendsByGroup error : user has no friends in this group")
-                        console.log(userID + " " + query.data );
-                        console.log(this.friendsByGroup);
+                        if(this.friendsByGroup[userID][query.data]){
+                            res.write(JSON.stringify(this.friendsByGroup[userID][query.data]));
+                        }
+                        else{
+                            console.log("getFriendsByGroup error : user has no friends in this group")
+                            console.log(userID + " " + query.data );
+                            console.log(this.friendsByGroup);
+                        }
                     }
                 }
                 else{
@@ -408,7 +455,10 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
             }
             res.end();
             break;
+
+
         case 'enterRelationship':
+            console.log("enterRelationship");
             if(query.data){
                 var userID = query.data[0];
                 var contactID = query.data[1];
@@ -420,6 +470,7 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
                     this.relationships[userID] = {};
                     this.relationships[userID][contactID] = relationshipName;
                 }
+
                 if(!this.friendsByGroup[userID]){
                     this.friendsByGroup[userID] = {};
                 }
@@ -556,7 +607,7 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
 
               //  delete this.peers[query.id].users ;
                 delete this.dict[userID];
-                delete this.locations[query.id];
+                delete this.deviceLocations[query.id];
                 delete this.userDevices[userID][query.id];
                 delete this.userIds[query.id];
                 if(Object.keys(this.userDevices[userID]).length > 0){
