@@ -407,6 +407,7 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
                    }
                    else{
                        delete devices[j];
+                       //TODO: needs to get  new distance to new device
                    }
                }
                 //Object.append(this.distances[userID][contactID],groupDistances);
@@ -549,7 +550,7 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
             }
             res.end();
             break;
-        case 'contact':
+        case 'isContactOnline':
             if(this.userDevices[query.data]){
                 res.write(JSON.stringify(this.userDevices[query.data]));
                 res.end();
