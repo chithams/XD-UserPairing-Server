@@ -423,13 +423,20 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
             res.end();
             break;
         case 'getFriendsByGroup':
-            console.log(this.userDevices);
             if(this.userIds[query.id]){
-
                 var userID = this.userIds[query.id];
                 if(this.friendsByGroup[userID]){
                     if(query.data == "all"){
                         if(this.relationships[userID]){
+                            var contacts = Object.keys(this.relationships[userID]);
+                            for(var i = 0; i < contacts.length; i ++){
+                                //check if contacts online;
+                                var contactID = contacts[i];
+                                if(!this.userDevices[contactID]){
+                                    //delete offline contacts
+                                    delete this.relationships[userID][contactID];
+                                }
+                            }
                             res.write(JSON.stringify(this.relationships[userID]));
                             res.end();
                             break;
@@ -441,6 +448,14 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
                     }
                     else{
                         if(this.friendsByGroup[userID][query.data]){
+                            var contacts = Object.keys(this.friendsByGroup[userID][query.data]);
+                            for(var i = 0; i< contacts.length; i++){
+                                var contactID = contacts[i];
+                                if(!this.userDevices[contactID]){
+                                    //delete offline contacts
+                                    delete this.friendsByGroup[userID][query.data][contactID];
+                                }
+                            }
                             res.write(JSON.stringify(this.friendsByGroup[userID][query.data]));
                         }
                         else{
@@ -461,30 +476,6 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
             break;
 
 
-        case 'enterRelationship':
-            console.log("enterRelationship");
-            if(query.data){
-                var userID = this.userIds[query.id];
-                var contactID = query.data[0];
-                var relationshipName = query.data[1];
-                if(this.relationships[userID]){
-                    this.relationships[userID][contactID] = relationshipName;
-                }
-                else{
-                    this.relationships[userID] = {};
-                    this.relationships[userID][contactID] = relationshipName;
-                }
-
-                if(!this.friendsByGroup[userID]){
-                    this.friendsByGroup[userID] = {};
-                }
-                if(!this.friendsByGroup[userID][relationshipName]){
-                    this.friendsByGroup[userID][relationshipName] = {};
-                }
-                this.friendsByGroup[userID][relationshipName][contactID] = " ";
-            }
-            res.end();
-            break;
         case 'checkPairingRequest':
             if(this.pairingRequests[query.id]){
                 res.write(JSON.stringify(this.pairingRequests[query.id]));
@@ -558,6 +549,31 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
                 res.write(JSON.stringify(this.userDevices[query.data]));
                 res.end();
                 break;
+            }
+            res.end();
+            break;
+
+        case 'enterRelationship':
+            console.log("enterRelationship");
+            if(query.data){
+                var userID = this.userIds[query.id];
+                var contactID = query.data[0];
+                var relationshipName = query.data[1];
+                if(this.relationships[userID]){
+                    this.relationships[userID][contactID] = relationshipName;
+                }
+                else{
+                    this.relationships[userID] = {};
+                    this.relationships[userID][contactID] = relationshipName;
+                }
+
+                if(!this.friendsByGroup[userID]){
+                    this.friendsByGroup[userID] = {};
+                }
+                if(!this.friendsByGroup[userID][relationshipName]){
+                    this.friendsByGroup[userID][relationshipName] = {};
+                }
+                this.friendsByGroup[userID][relationshipName][contactID] = " ";
             }
             res.end();
             break;
