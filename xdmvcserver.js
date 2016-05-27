@@ -53,7 +53,7 @@ function XDmvcServer() {
     this.deviceLocations = {} ; //key = deviceID, value:  location coordinate lat,long,google userid
     this.distances = {}; //{userID: { contactID : {deviceID: distance in km} }
     this.relationships = {}; //{User's Google id: { User's friend's Google id : relationship} }
-    this.friendsByGroup = {};  //{user's google id: {relationship : {friend's id : " "}}}
+    this.friendsByGroup = {};  //{user's google id: {relationship : {friend's id : true}}}
     this.pairingRequests = {}; //{ deviceID :{Google user id of user who wants to pair with this device : ""}
 
 }
@@ -170,7 +170,7 @@ XDmvcServer.prototype.startPeerSever = function(port){
             }
         }
         that.deletePeerJsPeer(deviceId);
-        
+
         that.emit("disconnected", deviceId);
     });
 
@@ -359,7 +359,7 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
                     this.distances[userID][contactID][deviceID] = d;
 
                     res.write(JSON.stringify(d));
-                   console.log("DISTANCES: "+ this.distances);
+                    console.log("DISTANCES: "+ this.distances);
                 }
             }
             res.end();
@@ -402,15 +402,15 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
                 var contactID = contactList[c]
                 var devices = this.distances[userID][contactID];
                 console.log("DEVICES "+JSON.stringify(devices));
-               for( var j in devices){
-                   if(this.deviceLocations[j]) {
-                       groupDistances[j] = devices[j];
-                   }
-                   else{
-                       delete devices[j];
-                       //TODO: needs to get  new distance to new device
-                   }
-               }
+                for( var j in devices){
+                    if(this.deviceLocations[j]) {
+                        groupDistances[j] = devices[j];
+                    }
+                    else{
+                        delete devices[j];
+                        //TODO: needs to get  new distance to new device
+                    }
+                }
                 //Object.append(this.distances[userID][contactID],groupDistances);
             }
             var sortable = [];
@@ -499,44 +499,43 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
             var userID = this.userIds[query.id];
             var contactID = query.data;
             console.log(contactID );
-            console.log(" CONTACT ID");
+            console.log("CONTACT ID");
             if(this.userDevices[query.data]){
                 var contactsDevices = Object.keys(this.userDevices[query.data]);
                 var deviceToConnect = contactsDevices[contactsDevices.length-1]; //TODO: should be given as argument by client
-               if(this.relationships[userID] && this.relationships[contactID]){//TODO: what if relationships not set yet.
-
-                   if(this.relationships[userID][contactID] == "friend" && this.relationships[contactID][userID] == "friend") {
-                       //symmetric friendship,  returns "last" device of contact
-                       res.write(deviceToConnect); //connects to last device of contact
-                   }
-                   else{
-                       //asymmetric friendship, not "friend" for both.
-                       if(this.pairingRequests[query.id]){
-                           console.log(this.pairingRequests[query.id][contactID])
-                       }
-                       if(this.pairingRequests[query.id] && this.pairingRequests[query.id][contactID]){
-                           //pairingRequest accepted
-                           delete this.pairingRequests[query.id][contactID];
-                           res.write(deviceToConnect);
-                       }
-                       else {
-                           //needs confirmation to pair, add pairingRequest
-                           if (this.pairingRequests[deviceToConnect]) {
-                               this.pairingRequests[deviceToConnect][userID] = "T";
-                           }
-                           else {
-                               this.pairingRequests[deviceToConnect] = {};
-                               this.pairingRequests[deviceToConnect][userID] = "T";
-                           }
-                           //TODO: notify user, that pairing request was sent
-                           console.log("not close friend, pairing request added");
-                       }
-                   }
-               }
-               else{
-                   //TODO: solve this issue, requires relationships to be set.
-                  console.log("Relationships not defined");
-               }
+                if(this.relationships[userID] && this.relationships[contactID]){//TODO: what if relationships not set yet.
+                    if(this.relationships[userID][contactID] == "friend" && this.relationships[contactID][userID] == "friend") {
+                        //symmetric friendship,  returns "last" device of contact
+                        res.write(deviceToConnect); //connects to last device of contact
+                    }
+                    else{
+                        //asymmetric friendship, not "friend" for both.
+                        if(this.pairingRequests[query.id]){
+                            console.log(this.pairingRequests[query.id][contactID])
+                        }
+                        if(this.pairingRequests[query.id] && this.pairingRequests[query.id][contactID]){
+                            //pairingRequest accepted
+                            delete this.pairingRequests[query.id][contactID];
+                            res.write(deviceToConnect);
+                        }
+                        else {
+                            //needs confirmation to pair, add pairingRequest
+                            if (this.pairingRequests[deviceToConnect]) {
+                                this.pairingRequests[deviceToConnect][userID] = "T";
+                            }
+                            else {
+                                this.pairingRequests[deviceToConnect] = {};
+                                this.pairingRequests[deviceToConnect][userID] = "T";
+                            }
+                            //TODO: notify user, that pairing request was sent
+                            console.log("not close friend, pairing request added");
+                        }
+                    }
+                }
+                else{
+                    //TODO: solve this issue, requires relationships to be set.
+                    console.log("Relationships not defined");
+                }
 
             }
             else{
@@ -615,31 +614,31 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
             res.end();
             break;
         case 'userSignOut':
-                var split_list = query.data.split('.')
-                var jose_header = split_list[0];
-                var payload = split_list[1];
-                var signature = split_list[2];
+            var split_list = query.data.split('.')
+            var jose_header = split_list[0];
+            var payload = split_list[1];
+            var signature = split_list[2];
 
-                var atob = require('atob');
-                var payloadParsed = JSON.parse(atob(payload).toString());
-                var userID = payloadParsed.sub;
+            var atob = require('atob');
+            var payloadParsed = JSON.parse(atob(payload).toString());
+            var userID = payloadParsed.sub;
 
 
-              //  delete this.peers[query.id].users ;
-                delete this.dict[userID];
-                delete this.deviceLocations[query.id];
-                if(this.userDevices[userID]){
-                    delete this.userDevices[userID][query.id];
-                }
-                delete this.userIds[query.id];
-                if(Object.keys(this.userDevices[userID]).length > 0){
-                    //not last device for this user
-                }
-                else{
-                    //no more logged in devices for this user
-                    delete this.userDevices[userID];
-                }
-                console.log(this.userDevices);
+            //  delete this.peers[query.id].users ;
+            delete this.dict[userID];
+            delete this.deviceLocations[query.id];
+            if(this.userDevices[userID]){
+                delete this.userDevices[userID][query.id];
+            }
+            delete this.userIds[query.id];
+            if(Object.keys(this.userDevices[userID]).length > 0){
+                //not last device for this user
+            }
+            else{
+                //no more logged in devices for this user
+                delete this.userDevices[userID];
+            }
+            console.log(this.userDevices);
 
             res.end();
             break;
