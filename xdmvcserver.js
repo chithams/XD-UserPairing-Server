@@ -50,7 +50,7 @@ function XDmvcServer() {
     this.dict = {}; //key = Google UserId Token "sub", value = deviceId
     this.userDevices = {}; //key =  User's Google id, value = List of deviceIDs
     this.userIds = {}; //key = deviceId , value = User's Google id
-    this.deviceLocations = {} ; //key = deviceID, value:  location coordinate lat,long,google userid
+    this.deviceLocations = {} ; //key = deviceID, value:  location coordinate lat,long
     this.distances = {}; //{userID: { contactID : {deviceID: distance in km} }
     this.relationships = {}; //{User's Google id: { User's friend's Google id : relationship} }
     this.friendsByGroup = {};  //{user's google id: {relationship : {friend's id : true}}}
@@ -320,8 +320,8 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
     switch (query.type){
         case 'logLocation':
             var arr = query.data;
-            this.deviceLocations[query.id]= [arr[1],arr[2],arr[0]];
-            console.log("Location has been logged for "+query.id+ ", "+arr[0]);
+            this.deviceLocations[query.id]= [arr[0],arr[1]];
+            console.log("Location has been logged for device: "+query.id);
             res.end();
             break;
         case 'logDistance':
