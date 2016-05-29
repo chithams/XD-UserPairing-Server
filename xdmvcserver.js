@@ -222,6 +222,7 @@ XDmvcServer.prototype.startSocketIoServer = function startSocketIoServer(port) {
                         peerObject.connectedPeers = removeDeviceId;
                     }
                 }
+                //TODO: on disconnect clean user's structures
                 console.log('user '+ deviceId + ' disconnected --> server sent close event to connected socketIoPeers: ' + connPeers);
             } else
                 console.log('peer was not in socketIoPeers --> TODO:check logic');
