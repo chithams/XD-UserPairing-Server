@@ -521,11 +521,11 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
                         else {
                             //needs confirmation to pair, add pairingRequest
                             if (this.pairingRequests[deviceToConnect]) {
-                                this.pairingRequests[deviceToConnect][userID] = "T";
+                                this.pairingRequests[deviceToConnect][userID] = true;
                             }
                             else {
                                 this.pairingRequests[deviceToConnect] = {};
-                                this.pairingRequests[deviceToConnect][userID] = "T";
+                                this.pairingRequests[deviceToConnect][userID] = true
                             }
                             //TODO: notify user, that pairing request was sent
                             console.log("not close friend, pairing request added");
@@ -656,7 +656,6 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
                 var userID = payloadParsed.sub;
                 this.peers[query.id].users = userID;
                 this.dict[userID] = query.id;
-
                 this.userIds[query.id] = userID;
 
                 if(this.userDevices[userID]){
