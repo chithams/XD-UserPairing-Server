@@ -483,7 +483,7 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
                 console.log("found pairing requests");
             }
             else{
-                console.log("no pairing requests");
+                //console.log("no pairing requests");
             }
             res.end();
             break;
