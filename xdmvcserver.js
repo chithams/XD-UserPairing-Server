@@ -169,8 +169,10 @@ XDmvcServer.prototype.startPeerSever = function(port){
                 delete that.sessions[that.peerJsPeers[deviceId].session];
             }
 
-            this.disconnectUser(deviceId);
+
         }
+        console.log("peerserver disconnecting user " +deviceId);
+        this.disconnectUser(deviceId);
         that.deletePeerJsPeer(deviceId);
         that.emit("disconnected", deviceId);
     }.bind(this));
@@ -178,27 +180,27 @@ XDmvcServer.prototype.startPeerSever = function(port){
 };
 
 XDmvcServer.prototype.disconnectUser = function disconnectUser(deviceId){
-    if(this.userIds[deviceId]) {
-        var userID = this.userIds[deviceId];
-        delete this.dict[userID];
-        if(this.userDevices[userID]){
-            delete this.userDevices[userID][deviceId];
-        }
-        delete this.userIds[deviceId];
-    }
-    else{
+    if(deviceId){
+        console.log(this.userDevices);
         console.log(this.userIds);
-        console.log(deviceId);
+        if(this.userIds[deviceId]) {
+            var userID = this.userIds[deviceId];
+            delete this.dict[userID];
+            if(this.userDevices[userID]){
+                delete this.userDevices[userID][deviceId];
+            }
+            delete this.userIds[deviceId];
+        }
+        else{
+            console.log("userIds: ");
+            console.log(this.userIds);
+            console.log(deviceId);
+        }
+        delete this.deviceLocations[deviceId];
+        console.log(this.userDevices);
+        console.log(this.userIds);
     }
-    //  delete this.peers[query.id].users ;
-    delete this.deviceLocations[deviceId];
-    if(this.userDevices[userID]){
-        //not last device for this user, do nothin
-    }
-    else{
-        console.log(this.userDevices[userID])
-        delete this.userDevices[userID];
-    }
+
 };
 
 XDmvcServer.prototype.startSocketIoServer = function startSocketIoServer(port) {
@@ -235,6 +237,7 @@ XDmvcServer.prototype.startSocketIoServer = function startSocketIoServer(port) {
             xdServer.deleteSocketIoPeer(deviceId); //delete peer that disconnected
 
             if(deviceId) {
+                console.log("socket server disconnecting user " +deviceId);
                 this.disconnectUser(deviceId);
                 var arrayLength = connPeers.length;
                 var msg = {sender:deviceId, eventTag:'close'};
@@ -252,7 +255,7 @@ XDmvcServer.prototype.startSocketIoServer = function startSocketIoServer(port) {
                 console.log('user '+ deviceId + ' disconnected --> server sent close event to connected socketIoPeers: ' + connPeers);
             } else
                 console.log('peer was not in socketIoPeers --> TODO:check logic');
-        });
+        }.bind(this));
 
         socket.on('connectTo', function(msg) {
             var receiver = msg.receiver;
@@ -312,7 +315,7 @@ XDmvcServer.prototype.startSocketIoServer = function startSocketIoServer(port) {
             console.log('socket Error: ' + err);
         });
 
-    });
+    }.bind(this));
 };
 
 
@@ -698,6 +701,7 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
                     console.log("first login")
                 }
                 console.log(this.userDevices);
+                console.log(this.userIds);
 
             }
             else{
