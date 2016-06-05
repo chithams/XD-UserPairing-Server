@@ -181,8 +181,7 @@ XDmvcServer.prototype.startPeerSever = function(port){
 
 XDmvcServer.prototype.disconnectUser = function disconnectUser(deviceId){
     if(deviceId){
-        console.log(this.userDevices);
-        console.log(this.userIds);
+
         if(this.userIds[deviceId]) {
             var userID = this.userIds[deviceId];
             delete this.dict[userID];
@@ -191,14 +190,8 @@ XDmvcServer.prototype.disconnectUser = function disconnectUser(deviceId){
             }
             delete this.userIds[deviceId];
         }
-        else{
-            console.log("userIds: ");
-            console.log(this.userIds);
-            console.log(deviceId);
-        }
         delete this.deviceLocations[deviceId];
-        console.log(this.userDevices);
-        console.log(this.userIds);
+
     }
 
 };
@@ -222,7 +215,7 @@ XDmvcServer.prototype.startSocketIoServer = function startSocketIoServer(port) {
         });
 
         socket.on('disconnect', function(){
-            //TODO: handle disconnect
+
             //console.log('user disconnected ' + socket.id);
             var deviceId;
             var connPeers;
@@ -351,27 +344,27 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
         case 'logLocation':
             var arr = query.data;
             this.deviceLocations[query.id]= [arr[0],arr[1]];
-            console.log("Location has been logged for device: "+query.id);
+
             res.end();
             break;
         case 'logDistance':
-            console.log("logging distance");
+
             var myLocationEntry= this.deviceLocations[query.id];
             var userID = this.userIds[query.id];
             var contactID = query.data;
             var devices = Object.keys(this.userDevices[contactID]);
-            console.log(devices);
+
             for(var k = 0 ; k< devices.length; k++){
                 var deviceID = devices[k];
                 var contactsLocationEntry = this.deviceLocations[deviceID];
-                console.log("iterating devices");
+
                 if(contactsLocationEntry && contactsLocationEntry.length>0 && myLocationEntry && myLocationEntry.length>0) {
-                    console.log("found location entries");
+
                     var lat1 = myLocationEntry[0];
                     var lon1 = myLocationEntry[1];
                     var lat2 = contactsLocationEntry[0];
                     var lon2 = contactsLocationEntry[1];
-                    console.log(lat2 + " * " + lon2);
+
                     var R = 6371; // Radius of the earth in km
                     var dLat = (lat2 - lat1) * (Math.PI / 180);  // deg2rad below
                     var dLon = (lon2 - lon1) * (Math.PI / 180);
@@ -383,13 +376,13 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
                         ;
                     var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
                     var d = R * c; // Distance in km
-                    console.log("DISTANCE " + d);
+
                     if(!this.distances[userID]) this.distances[userID] = {};
                     if(!this.distances[userID][contactID]) this.distances[userID][contactID] = {};
                     this.distances[userID][contactID][deviceID] = d;
 
                     res.write(JSON.stringify(d));
-                    console.log("DISTANCES: "+ this.distances);
+
                 }
             }
             res.end();
@@ -402,7 +395,7 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
             break;
         case 'removeDevice':
             //TODO: on disconnect, clean dicts.
-            console.log("REFRESHING OR CLOSING");
+
             if(this.userIds[query.id]){
                 var userID = this.userIds[query.id];
                 if(this.userDevices[userID][query.id]){
@@ -425,13 +418,13 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
             res.end();
             break;
         case 'sortGroupByDistance':
-            var contactList = Object.keys(JSON.parse(query.data));
+            var contactList = JSON.parse(query.data);
             var userID = this.userIds[query.id];
             var groupDistances = {};
             for(var c = 0; c < contactList.length;c++){
                 var contactID = contactList[c]
                 var devices = this.distances[userID][contactID];
-                console.log("DEVICES "+JSON.stringify(devices));
+
                 for( var j in devices){
                     if(this.deviceLocations[j]) {
                         groupDistances[j] = devices[j];
@@ -471,10 +464,7 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
                             res.end();
                             break;
                         }
-                        else{
-                            console.log("in all: ");
-                            console.log(this.relationships);
-                        }
+
                     }
                     else{
                         if(this.friendsByGroup[userID][query.data]){
@@ -489,16 +479,80 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
                             res.write(JSON.stringify(this.friendsByGroup[userID][query.data]));
                         }
                         else{
-                            console.log("getFriendsByGroup error : user has no friends in this group")
-                            console.log(userID + " " + query.data );
-                            console.log(this.friendsByGroup);
+                            console.log("getFriendsByGroup  : user has no friends in this group")
+
                         }
                     }
                 }
                 else{
+                    console.log("getFriendsByGroup : friends not entered")
+
+                }
+
+            }
+            res.end();
+            break;
+        case 'getFriendsSelected':
+            if(this.userIds[query.id]){
+                var userID = this.userIds[query.id];
+                if(this.friendsByGroup[userID]){
+                    var groupNames = query.data;
+                    var numGroups = groupNames.length;
+                    var result = [];
+                    for(var k = 0; k < numGroups; k++){
+                        groupName = groupNames[k];
+                        if(groupName == "all"){
+                            if(this.relationships[userID]){
+                                var contacts = Object.keys(this.relationships[userID]);
+                                for(var i = 0; i < contacts.length; i ++){
+                                    //check if contacts online;
+                                    var contactID = contacts[i];
+                                    if(!this.userDevices[contactID]){
+                                        //delete offline contacts
+                                        delete this.relationships[userID][contactID];
+                                    }
+                                }
+                                var list = Object.keys(this.relationships[userID]);
+                                for(var j = 0; j < list.length; j ++){
+                                    result.push(list[j]);
+                                }
+
+                            }
+                            else{
+
+                            }
+                        }
+                        else{
+                            if(this.friendsByGroup[userID][groupName]){
+                                var contacts = Object.keys(this.friendsByGroup[userID][groupName]);
+                                for(var i = 0; i< contacts.length; i++){
+                                    var contactID = contacts[i];
+                                    if(!this.userDevices[contactID]){
+                                        //delete offline contacts
+                                        delete this.friendsByGroup[userID][groupName][contactID];
+                                    }
+                                }
+                                var list = Object.keys(this.friendsByGroup[userID][groupName]);
+
+                                for(var j = 0; j < list.length; j ++){
+                                    result.push(list[j]);
+                                }
+
+                            }
+                            else{
+                                console.log("getFriendsByGroup : user has no friends in this group")
+
+                            }
+                        }
+                    }
+                    res.write(JSON.stringify(result));
+                    res.end();
+                    break;
+
+                }
+                else{
                     console.log("getFriendsByGroup error: friends not entered")
-                    console.log(userID + " " + query.data );
-                    console.log(this.friendsByGroup);
+
                 }
 
             }
@@ -506,13 +560,11 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
             break;
 
 
+
         case 'checkPairingRequest':
             if(this.pairingRequests[query.id]){
                 res.write(JSON.stringify(this.pairingRequests[query.id]));
-                console.log("found pairing requests");
-            }
-            else{
-                //console.log("no pairing requests");
+
             }
             res.end();
             break;
@@ -528,8 +580,7 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
             //TODO: requires that this.relationship is updated for userID and contactID!
             var userID = this.userIds[query.id];
             var contactID = query.data;
-            console.log(contactID );
-            console.log("CONTACT ID");
+
             if(this.userDevices[query.data]){
                 var contactsDevices = Object.keys(this.userDevices[query.data]);
                 var deviceToConnect = contactsDevices[contactsDevices.length-1]; //TODO: should be given as argument by client
@@ -540,9 +591,7 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
                     }
                     else{
                         //asymmetric friendship, not "friend" for both.
-                        if(this.pairingRequests[query.id]){
-                            console.log(this.pairingRequests[query.id][contactID])
-                        }
+
                         if(this.pairingRequests[query.id] && this.pairingRequests[query.id][contactID]){
                             //pairingRequest accepted
                             delete this.pairingRequests[query.id][contactID];
@@ -558,18 +607,16 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
                                 this.pairingRequests[deviceToConnect][userID] = true
                             }
                             //TODO: notify user, that pairing request was sent
-                            console.log("not close friend, pairing request added");
+
                         }
                     }
                 }
                 else{
-                    //TODO: solve this issue, requires relationships to be set.
-                    console.log("Relationships not defined");
+
                 }
 
             }
             else{
-                console.log("NO device found");
             }
             res.end();
             break;
@@ -583,7 +630,7 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
             break;
 
         case 'enterRelationship':
-            console.log("enterRelationship");
+
             if(query.data){
                 var userID = this.userIds[query.id];
                 var contactID = query.data[0];
@@ -644,13 +691,7 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
             res.end();
             break;
         case 'userSignOut':
-            // var split_list = query.data.split('.')
-            // var jose_header = split_list[0];
-            // var payload = split_list[1];
-            // var signature = split_list[2];
-            //
-            // var atob = require('atob');
-            // var payloadParsed = JSON.parse(atob(payload).toString());
+
             var userID = query.data; //payloadParsed.sub;
             console.log("user SIGNING OUT: "+query.data);
 
@@ -668,7 +709,7 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
                 //no more logged in devices for this user
                 delete this.userDevices[userID];
             }
-            console.log(this.userDevices);
+
 
             res.end();
             break;
@@ -677,14 +718,6 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
             //var Base64={_keyStr:"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=",encode:function(e){var t="";var n,r,i,s,o,u,a;var f=0;e=Base64._utf8_encode(e);while(f<e.length){n=e.charCodeAt(f++);r=e.charCodeAt(f++);i=e.charCodeAt(f++);s=n>>2;o=(n&3)<<4|r>>4;u=(r&15)<<2|i>>6;a=i&63;if(isNaN(r)){u=a=64}else if(isNaN(i)){a=64}t=t+this._keyStr.charAt(s)+this._keyStr.charAt(o)+this._keyStr.charAt(u)+this._keyStr.charAt(a)}return t},decode:function(e){var t="";var n,r,i;var s,o,u,a;var f=0;e=e.replace(/[^A-Za-z0-9\+\/\=]/g,"");while(f<e.length){s=this._keyStr.indexOf(e.charAt(f++));o=this._keyStr.indexOf(e.charAt(f++));u=this._keyStr.indexOf(e.charAt(f++));a=this._keyStr.indexOf(e.charAt(f++));n=s<<2|o>>4;r=(o&15)<<4|u>>2;i=(u&3)<<6|a;t=t+String.fromCharCode(n);if(u!=64){t=t+String.fromCharCode(r)}if(a!=64){t=t+String.fromCharCode(i)}}t=Base64._utf8_decode(t);return t},_utf8_encode:function(e){e=e.replace(/\r\n/g,"\n");var t="";for(var n=0;n<e.length;n++){var r=e.charCodeAt(n);if(r<128){t+=String.fromCharCode(r)}else if(r>127&&r<2048){t+=String.fromCharCode(r>>6|192);t+=String.fromCharCode(r&63|128)}else{t+=String.fromCharCode(r>>12|224);t+=String.fromCharCode(r>>6&63|128);t+=String.fromCharCode(r&63|128)}}return t},_utf8_decode:function(e){var t="";var n=0;var r=c1=c2=0;while(n<e.length){r=e.charCodeAt(n);if(r<128){t+=String.fromCharCode(r);n++}else if(r>191&&r<224){c2=e.charCodeAt(n+1);t+=String.fromCharCode((r&31)<<6|c2&63);n+=2}else{c2=e.charCodeAt(n+1);c3=e.charCodeAt(n+2);t+=String.fromCharCode((r&15)<<12|(c2&63)<<6|c3&63);n+=3}}return t}}
             console.log("user SIGNING IN: "+query.data);
             if(this.peers[query.id]){
-                console.log("signing In");
-                // var split_list = query.data.split('.');
-                // var jose_header = split_list[0];
-                // var payload = split_list[1];
-                // var signature = split_list[2];
-                // var atob = require('atob');
-                // var payloadParsed = JSON.parse(atob(payload).toString());
-                // var userID = payloadParsed.sub;
                 var userID = query.data;
                 this.peers[query.id].users = userID;
                 this.dict[userID] = query.id;
@@ -693,21 +726,13 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
                 if(this.userDevices[userID]){
                     res.write(JSON.stringify(this.userDevices[userID]));
                     this.userDevices[userID][query.id] = " ";
-                    console.log("not first login")
                 }
                 else{
                     this.userDevices[userID] = {};
                     this.userDevices[userID][query.id] = " ";
-                    console.log("first login")
                 }
-                console.log(this.userDevices);
-                console.log(this.userIds);
+            }
 
-            }
-            else{
-                console.log("no entry in this.peers")
-                console.log(this.peers);
-            }
             res.end();
             break;
 
