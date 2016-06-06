@@ -445,53 +445,7 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
 
             res.end();
             break;
-        case 'getFriendsByGroup':
-            if(this.userIds[query.id]){
-                var userID = this.userIds[query.id];
-                if(this.friendsByGroup[userID]){
-                    if(query.data == "all"){
-                        if(this.relationships[userID]){
-                            var contacts = Object.keys(this.relationships[userID]);
-                            for(var i = 0; i < contacts.length; i ++){
-                                //check if contacts online;
-                                var contactID = contacts[i];
-                                if(!this.userDevices[contactID]){
-                                    //delete offline contacts
-                                    delete this.relationships[userID][contactID];
-                                }
-                            }
-                            res.write(JSON.stringify(this.relationships[userID]));
-                            res.end();
-                            break;
-                        }
 
-                    }
-                    else{
-                        if(this.friendsByGroup[userID][query.data]){
-                            var contacts = Object.keys(this.friendsByGroup[userID][query.data]);
-                            for(var i = 0; i< contacts.length; i++){
-                                var contactID = contacts[i];
-                                if(!this.userDevices[contactID]){
-                                    //delete offline contacts
-                                    delete this.friendsByGroup[userID][query.data][contactID];
-                                }
-                            }
-                            res.write(JSON.stringify(this.friendsByGroup[userID][query.data]));
-                        }
-                        else{
-                            console.log("getFriendsByGroup  : user has no friends in this group")
-
-                        }
-                    }
-                }
-                else{
-                    console.log("getFriendsByGroup : friends not entered")
-
-                }
-
-            }
-            res.end();
-            break;
         case 'getFriendsSelected':
             if(this.userIds[query.id]){
                 var userID = this.userIds[query.id];
@@ -539,10 +493,6 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
                                 }
 
                             }
-                            else{
-                                console.log("getFriendsByGroup : user has no friends in this group")
-
-                            }
                         }
                     }
                     res.write(JSON.stringify(result));
@@ -551,16 +501,13 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
 
                 }
                 else{
-                    console.log("getFriendsByGroup error: friends not entered")
+                    console.log("getFriendsSelected error: friends not entered")
 
                 }
 
             }
             res.end();
             break;
-
-
-
         case 'checkPairingRequest':
             if(this.pairingRequests[query.id]){
                 res.write(JSON.stringify(this.pairingRequests[query.id]));
@@ -579,11 +526,26 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
             //TODO: should connect to specific device of friend, not just to "last" device of contact
             //TODO: requires that this.relationship is updated for userID and contactID!
             var userID = this.userIds[query.id];
-            var contactID = query.data;
+            var deviceID;
+            var contactID;
+            if(query.data[0] == "device"){
+                 deviceID =query.data[1].toString();;
 
-            if(this.userDevices[query.data]){
-                var contactsDevices = Object.keys(this.userDevices[query.data]);
-                var deviceToConnect = contactsDevices[contactsDevices.length-1]; //TODO: should be given as argument by client
+                 contactID = query.data[2].toString();;
+            }
+            else{
+                 contactID = query.data[1];
+            }
+
+            if(this.userDevices[contactID]){
+                
+                var contactsDevices = Object.keys(this.userDevices[contactID]);
+                if(deviceID){
+                    var deviceToConnect = deviceID;
+                }
+                else {
+                    var deviceToConnect = contactsDevices[contactsDevices.length - 1]; //TODO: should be given as argument by client
+                }
                 if(this.relationships[userID] && this.relationships[contactID]){//TODO: what if relationships not set yet.
                     if(this.relationships[userID][contactID] == "friend" && this.relationships[contactID][userID] == "friend") {
                         //symmetric friendship,  returns "last" device of contact
@@ -594,6 +556,63 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
 
                         if(this.pairingRequests[query.id] && this.pairingRequests[query.id][contactID]){
                             //pairingRequest accepted
+                            console.log(this.pairingRequests[query.id]);
+                            delete this.pairingRequests[query.id][contactID];
+                            res.write(deviceToConnect);
+                        }
+                        else {
+                            //needs confirmation to pair, add pairingRequest
+                            if (this.pairingRequests[deviceToConnect]) {
+                                this.pairingRequests[deviceToConnect][userID] = true;
+                            }
+                            else {
+                                this.pairingRequests[deviceToConnect] = {};
+                                this.pairingRequests[deviceToConnect][userID] = true
+                            }
+                            //TODO: notify user, that pairing request was sent
+
+                        }
+                    }
+                }
+                else{
+
+                }
+
+            }
+            else{
+            }
+            res.end();
+            break;
+        case 'pairDevice':
+            //TODO: should connect to specific device of friend, not just to "last" device of contact
+            //TODO: requires that this.relationship is updated for userID and contactID!
+            var userID = this.userIds[query.id];
+            var deviceID;
+            var contactID;
+
+             deviceID =query.data[0].toString();
+
+             contactID = query.data[1].toString();
+
+
+            if(this.userDevices[contactID]){
+
+                var contactsDevices = Object.keys(this.userDevices[contactID]);
+                if(deviceID){
+                    var deviceToConnect = deviceID;
+                }
+
+                if(this.relationships[userID] && this.relationships[contactID]){//TODO: what if relationships not set yet.
+                    if(this.relationships[userID][contactID] == "friend" && this.relationships[contactID][userID] == "friend") {
+                        //symmetric friendship,  returns "last" device of contact
+                        res.write(deviceToConnect); //connects to last device of contact
+                    }
+                    else{
+                        //asymmetric friendship, not "friend" for both.
+
+                        if(this.pairingRequests[query.id] && this.pairingRequests[query.id][contactID]){
+                            //pairingRequest accepted
+                            console.log(this.pairingRequests[query.id]);
                             delete this.pairingRequests[query.id][contactID];
                             res.write(deviceToConnect);
                         }
@@ -668,6 +687,7 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
             // only store device information, if the peer is already connected
             if (this.peers[query.id]){
                 this.peers[query.id].device = query.data
+                console.log(query.data);
             }
             res.end();
             break;
@@ -725,11 +745,11 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
 
                 if(this.userDevices[userID]){
                     res.write(JSON.stringify(this.userDevices[userID]));
-                    this.userDevices[userID][query.id] = " ";
+                    this.userDevices[userID][query.id] = this.peers[query.id].device["type"];
                 }
                 else{
                     this.userDevices[userID] = {};
-                    this.userDevices[userID][query.id] = " ";
+                    this.userDevices[userID][query.id] = this.peers[query.id].device["type"];
                 }
             }
 
