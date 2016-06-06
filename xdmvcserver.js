@@ -528,15 +528,16 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
             var userID = this.userIds[query.id];
             var deviceID;
             var contactID;
-            if(query.data[0] == "device"){
-                 deviceID =query.data[1].toString();;
 
-                 contactID = query.data[2].toString();;
+            if(query.data[0] == "device"){
+                 deviceID =query.data[1].toString();
+
+                 contactID = query.data[2].toString();
             }
             else{
                  contactID = query.data[1];
             }
-
+            
             if(this.userDevices[contactID]){
                 
                 var contactsDevices = Object.keys(this.userDevices[contactID]);
@@ -583,62 +584,7 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
             }
             res.end();
             break;
-        case 'pairDevice':
-            //TODO: should connect to specific device of friend, not just to "last" device of contact
-            //TODO: requires that this.relationship is updated for userID and contactID!
-            var userID = this.userIds[query.id];
-            var deviceID;
-            var contactID;
-
-             deviceID =query.data[0].toString();
-
-             contactID = query.data[1].toString();
-
-
-            if(this.userDevices[contactID]){
-
-                var contactsDevices = Object.keys(this.userDevices[contactID]);
-                if(deviceID){
-                    var deviceToConnect = deviceID;
-                }
-
-                if(this.relationships[userID] && this.relationships[contactID]){//TODO: what if relationships not set yet.
-                    if(this.relationships[userID][contactID] == "friend" && this.relationships[contactID][userID] == "friend") {
-                        //symmetric friendship,  returns "last" device of contact
-                        res.write(deviceToConnect); //connects to last device of contact
-                    }
-                    else{
-                        //asymmetric friendship, not "friend" for both.
-
-                        if(this.pairingRequests[query.id] && this.pairingRequests[query.id][contactID]){
-                            //pairingRequest accepted
-                            console.log(this.pairingRequests[query.id]);
-                            delete this.pairingRequests[query.id][contactID];
-                            res.write(deviceToConnect);
-                        }
-                        else {
-                            //needs confirmation to pair, add pairingRequest
-                            if (this.pairingRequests[deviceToConnect]) {
-                                this.pairingRequests[deviceToConnect][userID] = true;
-                            }
-                            else {
-                                this.pairingRequests[deviceToConnect] = {};
-                                this.pairingRequests[deviceToConnect][userID] = true
-                            }
-                            //TODO: notify user, that pairing request was sent
-
-                        }
-                    }
-                }
-                else{
-
-                }
-
-            }
-            else{
-            }
-            res.end();
-            break;
+        //
         case 'isContactOnline':
             if(this.userDevices[query.data]){
                 res.write(JSON.stringify(this.userDevices[query.data]));
