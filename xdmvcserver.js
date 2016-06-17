@@ -55,7 +55,7 @@ function XDmvcServer() {
     this.relationships = {}; //{User's Google id: { User's friend's Google id : relationship} }
     this.friendsByGroup = {};  //{user's google id: {relationship : {friend's id : true}}}
     this.pairingRequests = {}; //{ deviceID :{Google user id of user who wants to pair with this device : ""}
-
+    this.groups = {}; //configurable groups, {"name" : if requiresAck true, else false}
 }
 util.inherits(XDmvcServer, EventEmitter);
 
@@ -394,10 +394,9 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
             res.end();
             break;
         case 'removeDevice':
-            //TODO: on disconnect, clean dicts.
-
             if(this.userIds[query.id]){
                 var userID = this.userIds[query.id];
+                console.log(userID);
                 if(this.userDevices[userID][query.id]){
                     delete this.userDevices[userID][query.id];
                 }
@@ -522,6 +521,13 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
             }
             res.end();
             break;
+        case 'configGroups':
+            
+            this.groups = query.data;
+            console.log(query.data);
+            
+            res.end();
+            break;
         case 'pairfriends':
             //TODO: should connect to specific device of friend, not just to "last" device of contact
             //TODO: requires that this.relationship is updated for userID and contactID!
@@ -548,7 +554,7 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
                     var deviceToConnect = contactsDevices[contactsDevices.length - 1]; //TODO: should be given as argument by client
                 }
                 if(this.relationships[userID] && this.relationships[contactID]){//TODO: what if relationships not set yet.
-                    if(this.relationships[userID][contactID] == "friend" && this.relationships[contactID][userID] == "friend") {
+                    if(!this.groups[this.relationships[userID][contactID]] && !this.groups[this.relationships[contactID][userID]]) {
                         //symmetric friendship,  returns "last" device of contact
                         res.write(deviceToConnect); //connects to last device of contact
                     }
@@ -607,7 +613,6 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
                     this.relationships[userID] = {};
                     this.relationships[userID][contactID] = relationshipName;
                 }
-
                 if(!this.friendsByGroup[userID]){
                     this.friendsByGroup[userID] = {};
                 }
@@ -675,8 +680,6 @@ XDmvcServer.prototype.handleAjaxRequest = function(req, res, next){
                 //no more logged in devices for this user
                 delete this.userDevices[userID];
             }
-
-
             res.end();
             break;
 
